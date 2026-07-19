@@ -5,7 +5,7 @@ import {
   Legend as RLegend,
 } from "recharts";
 import { LayoutDashboard, Activity, Timer, Coins, Info } from "lucide-react";
- 
+
 const STYLES = `
 :root {
   --ink: #14213d;
@@ -247,6 +247,48 @@ td.num, th.num { text-align: right; }
   .side nav button { justify-content: center; padding: 10px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* ---------- lead-time priority control ---------- */
+.lt-toggle { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+.lt-toggle button { border:0; background:#fff; color:var(--steel); padding:7px 14px; font:inherit; cursor:pointer; }
+.lt-toggle button.on { background:var(--ink); color:#fff; }
+.status-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.status-box { border:1px solid var(--line); border-radius:9px; padding:11px 12px; background:#fff; }
+.status-box b { display:block; font-size:20px; margin-top:3px; }
+.status-box span { font-size:11.5px; color:var(--muted); }
+.status-chip { display:inline-flex; align-items:center; gap:6px; padding:4px 9px; border-radius:99px; font-size:11.5px; font-weight:600; white-space:nowrap; }
+.status-chip::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; }
+.status-chip.waiting { color:#a8720f; background:var(--hold-bg); }
+.status-chip.active-processing { color:var(--sys); background:var(--sys-bg); }
+.status-chip.arrived-at-storage-location { color:var(--go); background:var(--go-bg); }
+.status-chip.late-inbound { color:var(--stop); background:var(--stop-bg); }
+.stock-zero { color:var(--stop); font-weight:700; }
+.stock-ok { color:var(--go); font-weight:600; }
+.priority-score { min-width:38px; display:inline-block; text-align:center; padding:3px 7px; border-radius:6px; font-family:var(--mono); font-weight:700; }
+.priority-score.p1 { background:var(--stop-bg); color:var(--stop); }
+.priority-score.p2 { background:var(--hold-bg); color:#a8720f; }
+.priority-score.p3 { background:#edf0f4; color:var(--steel); }
+.wave-grid { display:grid; grid-template-columns:repeat(5,minmax(190px,1fr)); gap:10px; overflow-x:auto; padding-bottom:3px; }
+.wave-card { border:1px solid var(--line); border-radius:10px; background:#fff; padding:12px; min-width:190px; }
+.wave-card.critical { border-top:4px solid var(--stop); }
+.wave-card.watch { border-top:4px solid var(--hold); }
+.wave-card.ready { border-top:4px solid var(--go); }
+.wave-head { display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+.wave-time { font-size:22px; font-weight:700; font-family:var(--mono); }
+.wave-name { color:var(--muted); font-size:11.5px; margin-top:2px; }
+.wave-total { font-size:11px; color:var(--muted); text-align:right; }
+.stack { display:flex; height:12px; overflow:hidden; border-radius:6px; background:#edf0f4; margin:12px 0 9px; }
+.stack i { display:block; height:100%; }
+.stack .loaded { background:var(--go); }
+.stack .packed { background:var(--sys); }
+.stack .not-packed { background:var(--hold); }
+.stack .not-picked { background:var(--move); }
+.stack .critical-open { background:var(--stop); }
+.wave-status { display:grid; grid-template-columns:1fr auto; gap:5px 8px; font-size:11.5px; }
+.wave-status b { font-family:var(--mono); }
+.wave-status .critical-text { color:var(--stop); font-weight:700; }
+.priority-callout { border-left:4px solid var(--stop); background:#fff8f7; padding:10px 12px; border-radius:7px; font-size:12.5px; line-height:1.45; }
+@media (max-width:1000px) { .status-summary { grid-template-columns:repeat(2,1fr); } }
 
 `;
 
@@ -1156,183 +1198,176 @@ function Operations({ f }) {
   );
 }
 
+const MATERIAL_GROUPS = [
+  { wh:"OBH", group:"Fasteners & Anchors", articles:46, zeroStock:9, openOrders:128, status:"Late Inbound", arrival:"07:18", age:224, sla:180, completion:64 },
+  { wh:"OBH", group:"Power Tools", articles:18, zeroStock:5, openOrders:74, status:"Active Processing", arrival:"09:05", age:118, sla:180, completion:48 },
+  { wh:"OBH", group:"Consumables", articles:62, zeroStock:0, openOrders:31, status:"Arrived at storage location", arrival:"06:42", age:151, sla:180, completion:100 },
+  { wh:"NUE", group:"Diamond Systems", articles:14, zeroStock:6, openOrders:93, status:"Waiting", arrival:"08:24", age:171, sla:180, completion:12 },
+  { wh:"NUE", group:"Measuring Systems", articles:21, zeroStock:2, openOrders:44, status:"Active Processing", arrival:"09:32", age:96, sla:180, completion:58 },
+  { wh:"NUE", group:"Installation Systems", articles:37, zeroStock:0, openOrders:18, status:"Arrived at storage location", arrival:"07:11", age:166, sla:180, completion:100 },
+  { wh:"VIE", group:"Fasteners & Anchors", articles:41, zeroStock:12, openOrders:167, status:"Late Inbound", arrival:"06:55", age:249, sla:180, completion:39 },
+  { wh:"VIE", group:"Firestop", articles:25, zeroStock:4, openOrders:61, status:"Waiting", arrival:"08:47", age:159, sla:180, completion:8 },
+  { wh:"VIE", group:"Power Tools", articles:16, zeroStock:1, openOrders:39, status:"Active Processing", arrival:"10:02", age:81, sla:180, completion:67 },
+  { wh:"ZRH", group:"Consumables", articles:55, zeroStock:0, openOrders:22, status:"Arrived at storage location", arrival:"07:38", age:143, sla:180, completion:100 },
+  { wh:"ZRH", group:"Measuring Systems", articles:19, zeroStock:3, openOrders:57, status:"Active Processing", arrival:"09:18", age:103, sla:180, completion:52 },
+  { wh:"ZRH", group:"Installation Systems", articles:28, zeroStock:0, openOrders:13, status:"Waiting", arrival:"10:26", age:65, sla:180, completion:4 },
+  { wh:"WRO", group:"Fasteners & Anchors", articles:49, zeroStock:15, openOrders:201, status:"Late Inbound", arrival:"06:21", age:283, sla:180, completion:31 },
+  { wh:"WRO", group:"Diamond Systems", articles:17, zeroStock:7, openOrders:112, status:"Late Inbound", arrival:"07:04", age:241, sla:180, completion:43 },
+  { wh:"WRO", group:"Power Tools", articles:23, zeroStock:2, openOrders:48, status:"Waiting", arrival:"09:44", age:91, sla:180, completion:5 },
+];
+
+const DEPARTURE_WAVES = [
+  { key:"P18", time:"18:00", name:"Parcel departure", loaded:420, packed:96, notPacked:54, notPicked:37, critical:28 },
+  { key:"L18", time:"18:00", name:"Linehaul departure", loaded:286, packed:74, notPacked:63, notPicked:51, critical:36 },
+  { key:"1830", time:"18:30", name:"Express departure", loaded:174, packed:68, notPacked:35, notPicked:26, critical:15 },
+  { key:"20", time:"20:00", name:"Evening departure", loaded:118, packed:82, notPacked:47, notPicked:44, critical:12 },
+  { key:"22", time:"22:00", name:"Late departure", loaded:42, packed:61, notPacked:52, notPicked:67, critical:8 },
+];
+
+function statusSlug(value) { return value.toLowerCase().replaceAll(" ", "-"); }
+
 function LeadTime({ f }) {
   const [dir, setDir] = useState("inbound");
-  const [sel, setSel] = useState(null);
   const whIds = f.wh === "ALL" ? WAREHOUSES.map((w) => w.id) : [f.wh];
 
-  const items = (dir === "inbound" ? TRUCKLOADS : ORDERS).filter((x) => whIds.includes(x.wh));
-  const stepDefs = dir === "inbound" ? INBOUND_STEPS : OUTBOUND_STEPS;
+  const inboundRows = useMemo(() => MATERIAL_GROUPS
+    .filter((r) => whIds.includes(r.wh))
+    .map((r) => ({
+      ...r,
+      priority: (r.status === "Late Inbound" ? 45 : 0) + Math.min(35, r.zeroStock * 3) + Math.min(20, Math.round(r.openOrders / 10)),
+    }))
+    .sort((a,b) => b.priority - a.priority), [whIds.join(",")]);
 
-  /* per-step avg + median across the filtered items */
-  const stepStats = useMemo(() => {
-    return stepDefs
-      .filter((s) => s.id !== "arrival" && s.id !== "booked" && s.id !== "departure")
-      .map((s) => {
-        const durs = items.map((it) => it.steps.find((x) => x.id === s.id).dur).sort((a, b) => a - b);
-        const avg = durs.reduce((a, b) => a + b, 0) / Math.max(1, durs.length);
-        const med = durs[Math.floor(durs.length / 2)] || 0;
-        return { step: s.label, cat: s.cat, avg: +avg.toFixed(1), median: med, max: durs[durs.length - 1] || 0 };
-      });
-  }, [items, stepDefs]);
+  const inboundAgg = useMemo(() => ({
+    articles: inboundRows.reduce((a,r)=>a+r.articles,0),
+    zeroStock: inboundRows.reduce((a,r)=>a+r.zeroStock,0),
+    openOrders: inboundRows.reduce((a,r)=>a+r.openOrders,0),
+    lateOrders: inboundRows.filter(r=>r.status === "Late Inbound").reduce((a,r)=>a+r.openOrders,0),
+  }), [inboundRows]);
 
-  const bottleneck = [...stepStats].sort((a, b) => b.avg - a.avg)[0];
-  const worstWait = [...stepStats].filter((s) => s.cat === "wait").sort((a, b) => b.max - a.max)[0];
+  const statusCounts = useMemo(() => ["Waiting","Active Processing","Arrived at storage location","Late Inbound"].map(status => ({
+    status,
+    articles: inboundRows.filter(r=>r.status===status).reduce((a,r)=>a+r.articles,0),
+    orders: inboundRows.filter(r=>r.status===status).reduce((a,r)=>a+r.openOrders,0),
+  })), [inboundRows]);
 
-  const timeSplit = useMemo(() => {
-    const acc = { wait: 0, active: 0, system: 0, transport: 0 };
-    items.forEach((it) => it.steps.forEach((s) => { acc[s.cat] = (acc[s.cat] || 0) + s.dur; }));
-    const tot = Object.values(acc).reduce((a, b) => a + b, 0) || 1;
-    return Object.entries(acc).map(([k, v]) => ({ cat: k, pct: Math.round((v / tot) * 100) }));
-  }, [items]);
+  const factor = whIds.length === WAREHOUSES.length ? 1 : 0.23 + WAREHOUSES.findIndex(w=>w.id===whIds[0]) * 0.015;
+  const waves = useMemo(() => DEPARTURE_WAVES.map(w => {
+    const scale = v => Math.max(1, Math.round(v * factor));
+    const row = { ...w, loaded:scale(w.loaded), packed:scale(w.packed), notPacked:scale(w.notPacked), notPicked:scale(w.notPicked), critical:scale(w.critical) };
+    row.total = row.loaded + row.packed + row.notPacked + row.notPicked + row.critical;
+    row.readiness = Math.round((row.loaded / row.total) * 100);
+    row.risk = row.critical > row.total*.07 ? "critical" : row.critical > row.total*.035 ? "watch" : "ready";
+    return row;
+  }), [factor]);
 
-  const whCompare = useMemo(() => {
-    return WAREHOUSES.map((w) => {
-      const rows = DAILY.filter((r) => r.wh === w.id);
-      const a = aggregate(rows);
-      return { name: w.name, Inbound: a.inboundLT, Outbound: a.outboundLT };
-    });
-  }, []);
-
-  const shiftCompare = useMemo(() => {
-    return SHIFTS.map((s) => {
-      const rows = DAILY.filter((r) => r.shift === s && whIds.includes(r.wh));
-      const a = aggregate(rows);
-      return { name: s, Inbound: a.inboundLT, Outbound: a.outboundLT };
-    });
-  }, [whIds.join(",")]);
-
-  const volCompare = useMemo(() => {
-    const rows = DAILY.filter((r) => whIds.includes(r.wh));
-    const sorted = [...rows].sort((a, b) => a.volumeOut - b.volumeOut);
-    const low = aggregate(sorted.slice(0, Math.floor(sorted.length / 3)));
-    const high = aggregate(sorted.slice(-Math.floor(sorted.length / 3)));
-    return [
-      { name: "Low-volume days", Inbound: low.inboundLT, Outbound: low.outboundLT },
-      { name: "High-volume days", Inbound: high.inboundLT, Outbound: high.outboundLT },
-    ];
-  }, [whIds.join(",")]);
-
-  const catColor = { wait: "#e5a63b", active: "#1e9e6a", system: "#4c6fbf", transport: "#8a6fb8" };
+  const outboundAgg = useMemo(() => ({
+    total: waves.reduce((a,w)=>a+w.total,0),
+    loaded: waves.reduce((a,w)=>a+w.loaded,0),
+    packed: waves.reduce((a,w)=>a+w.packed,0),
+    critical: waves.reduce((a,w)=>a+w.critical,0),
+    notPicked: waves.reduce((a,w)=>a+w.notPicked,0),
+  }), [waves]);
 
   return (
     <>
       <div className="card">
-        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <div className="seg" style={{ display: "flex", border: "1px solid var(--line)", borderRadius: 7, overflow: "hidden" }}>
-            {["inbound", "outbound"].map((d) => (
-              <button key={d}
-                onClick={() => setDir(d)}
-                style={{
-                  font: "inherit", fontSize: 13, padding: "6px 14px", border: "none", cursor: "pointer",
-                  background: dir === d ? "var(--ink)" : "#fff", color: dir === d ? "#fff" : "var(--steel)",
-                }}>
-                {d === "inbound" ? "Inbound · arrival → storage" : "Outbound · booking → departure"}
-              </button>
-            ))}
-          </div>
-          <Legend />
-        </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
-          {items.map((it) => (
-            <div key={it.id} className="click" style={{ cursor: "pointer" }} onClick={() => setSel(it)}>
-              <SegmentBar
-                steps={it.steps}
-                sla={dir === "inbound" ? it.sla : it.plannedDep - it.booked}
-                startAt={dir === "inbound" ? it.arrival : it.booked}
-                title={`${it.id} · ${dir === "inbound" ? it.carrier : it.customer} · ${
-                  dir === "inbound" ? `arrival ${fmtHM(it.arrival)}` : `booked ${fmtHM(it.booked)}`
-                }`}
-                rightLabel={`${it.total} min${it.slaBreach > 0 ? ` · +${it.slaBreach} over SLA` : ""}`}
-              />
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+          <div>
+            <h3 style={{marginBottom:3}}>Lead-Time Control</h3>
+            <div className="muted" style={{fontSize:12.5}}>
+              Prioritize material availability inbound and protect the next outbound departure.
             </div>
-          ))}
-        </div>
-        <div className="chart-note">Click any strip to open the full step-by-step timeline.</div>
-      </div>
-
-      <div className="grid2">
-        <div className="card">
-          <h3>Average duration per step <small>{dir} · avg vs median</small></h3>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={stepStats} layout="vertical" margin={{ top: 4, right: 16, left: 30, bottom: 0 }}>
-              <CartesianGrid stroke="#edf0f4" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11 }} unit=" min" tickLine={false} axisLine={false} />
-              <YAxis type="category" dataKey="step" width={170} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ fontSize: 12 }} />
-              <Bar dataKey="avg" name="Average" radius={[0, 3, 3, 0]}>
-                {stepStats.map((s, i) => (
-                  <Cell key={i} fill={catColor[s.cat]} />
-                ))}
-              </Bar>
-              <Bar dataKey="median" name="Median" fill="#c6cfdd" radius={[0, 3, 3, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="chart-note">
-            Bottleneck: <b>{bottleneck?.step}</b> ({bottleneck?.avg} min avg) · longest single wait:{" "}
-            <b>{worstWait?.step}</b> at {worstWait?.max} min.
+          </div>
+          <div className="lt-toggle">
+            <button className={dir==="inbound"?"on":""} onClick={()=>setDir("inbound")}>Inbound · material availability</button>
+            <button className={dir==="outbound"?"on":""} onClick={()=>setDir("outbound")}>Outbound · departure waves</button>
           </div>
         </div>
+      </div>
 
-        <div className="card">
-          <h3>Where the time goes <small>{dir} · share of total lead time</small></h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 6 }}>
-            {timeSplit.map((s) => (
-              <div key={s.cat}>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5 }}>
-                  <span style={{ textTransform: "capitalize" }}>
-                    {s.cat === "wait" ? "Waiting" : s.cat === "active" ? "Active processing"
-                      : s.cat === "system" ? "System processing" : "Transport / movement"}
-                  </span>
-                  <span className="mono">{s.pct}%</span>
-                </div>
-                <div style={{ height: 8, background: "#edf0f4", borderRadius: 4, overflow: "hidden" }}>
-                  <div style={{ width: `${s.pct}%`, height: "100%", background: catColor[s.cat] }} />
-                </div>
+      {dir === "inbound" ? (
+        <>
+          <div className="kpis">
+            <KpiCard label="Inbound articles" value={inboundAgg.articles} sub="articles in current inbound scope" />
+            <KpiCard label="Zero-stock articles" value={inboundAgg.zeroStock} sub="no available stock before receipt" tone={inboundAgg.zeroStock>20?"bad":"warn"} />
+            <KpiCard label="Open customer orders" value={inboundAgg.openOrders} sub="dependent on these material groups" tone="warn" />
+            <KpiCard label="Orders exposed to late inbound" value={inboundAgg.lateOrders} sub="highest operational priority" tone="bad" />
+          </div>
+
+          <div className="status-summary">
+            {statusCounts.map(s => <div className="status-box" key={s.status}>
+              <span className={`status-chip ${statusSlug(s.status)}`}>{s.status}</span>
+              <b>{s.articles}</b>
+              <span>articles · {s.orders} open orders</span>
+            </div>)}
+          </div>
+
+          <div className="priority-callout">
+            <b>Priority rule:</b> Material groups are ranked first by late inbound, then by zero-stock exposure and the number of open customer orders. A late group with zero stock should be processed before a larger receipt that already has available stock.
+          </div>
+
+          <div className="card">
+            <h3>Inbound material-group priority queue <small>arrival → final storage location</small></h3>
+            <table className="data">
+              <thead><tr>
+                <th>Priority</th><th>Material group</th><th>WH</th><th>Status</th><th className="num">Articles</th>
+                <th className="num">Zero stock</th><th className="num">Open orders</th><th className="num">Arrival</th>
+                <th className="num">Elapsed / SLA</th><th style={{minWidth:130}}>Progress</th>
+              </tr></thead>
+              <tbody>{inboundRows.map((r,i) => {
+                const pClass=i<3?"p1":i<7?"p2":"p3";
+                return <tr key={`${r.wh}-${r.group}`}>
+                  <td><span className={`priority-score ${pClass}`}>P{i+1}</span></td>
+                  <td><b>{r.group}</b></td><td className="mono">{r.wh}</td>
+                  <td><span className={`status-chip ${statusSlug(r.status)}`}>{r.status}</span></td>
+                  <td className="num">{r.articles}</td>
+                  <td className={`num ${r.zeroStock>0?"stock-zero":"stock-ok"}`}>{r.zeroStock>0?r.zeroStock:"Covered"}</td>
+                  <td className="num"><b>{r.openOrders}</b></td><td className="num mono">{r.arrival}</td>
+                  <td className="num mono" style={{color:r.age>r.sla?"var(--stop)":undefined}}>{r.age} / {r.sla} min</td>
+                  <td><div className="bar" style={{height:7,background:"#edf0f4",borderRadius:4,overflow:"hidden"}}><i style={{display:"block",height:"100%",width:`${r.completion}%`,background:r.status==="Late Inbound"?"var(--stop)":r.status==="Arrived at storage location"?"var(--go)":"var(--sys)"}} /></div></td>
+                </tr>})}</tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="kpis">
+            <KpiCard label="Orders in departure scope" value={outboundAgg.total} sub="across five truck departures" />
+            <KpiCard label="Loaded" value={outboundAgg.loaded} sub={`${Math.round(outboundAgg.loaded/outboundAgg.total*100)}% physically on truck`} tone="good" />
+            <KpiCard label="Packed, waiting to load" value={outboundAgg.packed} sub="ready for loading" tone="warn" />
+            <KpiCard label="Open & critical" value={outboundAgg.critical} sub="cannot meet departure without action" tone="bad" />
+            <KpiCard label="Not picked" value={outboundAgg.notPicked} sub="still before first physical handling" tone={outboundAgg.notPicked>150?"bad":"warn"} />
+          </div>
+
+          <div className="priority-callout">
+            <b>Control logic:</b> “Open & critical” contains orders whose remaining pick, pack and loading time is longer than the time left to the assigned truck departure. These orders require immediate escalation or reassignment to a later departure.
+          </div>
+
+          <div className="card">
+            <h3>Outbound departure waves <small>two departures at 18:00, followed by 18:30, 20:00 and 22:00</small></h3>
+            <div className="wave-grid">{waves.map(w => <div className={`wave-card ${w.risk}`} key={w.key}>
+              <div className="wave-head"><div><div className="wave-time">{w.time}</div><div className="wave-name">{w.name}</div></div><div className="wave-total"><b>{w.total}</b><br/>orders</div></div>
+              <div className="stack" title="Process-status distribution">
+                <i className="loaded" style={{width:`${w.loaded/w.total*100}%`}}/><i className="packed" style={{width:`${w.packed/w.total*100}%`}}/>
+                <i className="not-packed" style={{width:`${w.notPacked/w.total*100}%`}}/><i className="not-picked" style={{width:`${w.notPicked/w.total*100}%`}}/>
+                <i className="critical-open" style={{width:`${w.critical/w.total*100}%`}}/>
               </div>
-            ))}
+              <div className="wave-status">
+                <span>Loaded</span><b>{w.loaded}</b><span>Packed, waiting to load</span><b>{w.packed}</b>
+                <span>Not packed</span><b>{w.notPacked}</b><span>Not picked</span><b>{w.notPicked}</b>
+                <span className="critical-text">Open & critical</span><b className="critical-text">{w.critical}</b>
+              </div>
+            </div>)}</div>
           </div>
-          <p className="chart-note">
-            Waiting time is not worked time — every waiting minute here is lead time the customer
-            feels but nobody is paid to produce. Reducing the two waiting steps is the fastest
-            lever on total {dir} lead time.
-          </p>
-        </div>
-      </div>
 
-      <div className="grid2">
-        <div className="card">
-          <h3>Lead time by warehouse <small>14-day average, minutes</small></h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={whCompare} margin={{ top: 4, right: 8, left: -14, bottom: 0 }}>
-              <CartesianGrid stroke="#edf0f4" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ fontSize: 12 }} />
-              <ReferenceLine y={TARGETS.inboundLT} stroke="#d9483b" strokeDasharray="4 3" />
-              <Bar dataKey="Inbound" fill="#4c6fbf" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="Outbound" fill="#8a6fb8" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="card">
-          <h3>By shift & by volume <small>selected scope, minutes</small></h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={[...shiftCompare, ...volCompare]} margin={{ top: 4, right: 8, left: -14, bottom: 0 }}>
-              <CartesianGrid stroke="#edf0f4" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ fontSize: 12 }} />
-              <Bar dataKey="Inbound" fill="#4c6fbf" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="Outbound" fill="#8a6fb8" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="chart-note">Night shift and high-volume days carry the longest lead times.</div>
-        </div>
-      </div>
-
-      <DetailDrawer item={sel} onClose={() => setSel(null)} />
+          <div className="card">
+            <h3>Departure readiness table <small>prioritize the earliest critical wave</small></h3>
+            <table className="data"><thead><tr><th>Departure</th><th>Truck / wave</th><th className="num">Total</th><th className="num">Loaded</th><th className="num">Packed waiting</th><th className="num">Not packed</th><th className="num">Not picked</th><th className="num">Open & critical</th><th className="num">Loaded share</th></tr></thead>
+            <tbody>{waves.map(w=><tr key={w.key}><td className="mono"><b>{w.time}</b></td><td>{w.name}</td><td className="num">{w.total}</td><td className="num stock-ok">{w.loaded}</td><td className="num">{w.packed}</td><td className="num">{w.notPacked}</td><td className="num">{w.notPicked}</td><td className="num stock-zero">{w.critical}</td><td className="num"><b>{w.readiness}%</b></td></tr>)}</tbody></table>
+          </div>
+        </>
+      )}
     </>
   );
 }
