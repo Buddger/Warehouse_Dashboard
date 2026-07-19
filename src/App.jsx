@@ -5,7 +5,7 @@ import {
   Legend as RLegend,
 } from "recharts";
 import { LayoutDashboard, Activity, Timer, Coins, Info } from "lucide-react";
-
+ 
 const STYLES = `
 :root {
   --ink: #14213d;
